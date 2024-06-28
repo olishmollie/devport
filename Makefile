@@ -1,6 +1,6 @@
-PROG = devport
+PROG = sio
 CFLAGS += -O -Wall -pedantic -std=c11
-OBJS = devport.o
+OBJS = sio.o
 
 $(PROG): $(OBJS)
 	$(CC) $(CFLAGS) $^ -o $(PROG)

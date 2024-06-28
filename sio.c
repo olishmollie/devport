@@ -33,18 +33,14 @@ void sio_exit(void)
     outb(LOCK, EFER);
 }
 
-void sio_chip_info(uint16_t iobase)
-{
-    printf("iobase = 0x%x\n", iobase);
-    int chipid = (sio_readb(0x20, EFER) << 8) | sio_readb(0x21, EFER);
-    printf("chipid_l = 0x%x\n", chipid);
-    sio_writeb(0x80, 0x4e, iobase);
-    int vendorid_high = sio_readb(0x4f, iobase);
-    sio_writeb(0x00, 0x4e, iobase);
-    int vendorid_low = sio_readb(0x4f, iobase);
-    printf("vendorid = 0x%x\n", (vendorid_high << 8) | vendorid_low);
-
-}
+/* void sio_chip_info(uint16_t iobase) */
+/* { */
+/*     int chipid = (sio_readb(0x20, EFER) << 8) | sio_readb(0x21, EFER); */
+/*     sio_writeb(0x80, 0x4e, iobase); */
+/*     int vendorid_high = sio_readb(0x4f, iobase); */
+/*     sio_writeb(0x00, 0x4e, iobase); */
+/*     int vendorid_low = sio_readb(0x4f, iobase); */
+/* } */
 
 void sio_ldn_select(uint8_t device)
 {
@@ -77,15 +73,14 @@ int main(int argc, char **argv)
     sio_ldn_select(0x0b);
 
     int iobase = ((sio_readb(0x60, EFER) << 8) | sio_readb(0x61, EFER)) + 5;
-    sio_chip_info(iobase);
 
     sio_bank_select(0x04, iobase);
 
     double cpuvcore = sio_readb(0x80, iobase) * 0.008;
-    printf("cpuvcore = %g V\n", cpuvcore);
+    printf("cpuvcore  %0.4f V, ", cpuvcore);
 
     sio_bank_select(0x01, iobase);
-    printf("cputin = %.1f C\n",
+    printf("cputin  %.1f C\n",
            sio_temperature(sio_readb(0x50, iobase), sio_readb(0x51, iobase)));
 
     sio_exit();

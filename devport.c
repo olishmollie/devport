@@ -4,96 +4,89 @@
 #include <stdio.h>
 #include <sys/io.h>
 
-#define ARR_SIZE(x) sizeof((x)) / sizeof((x[0]))
+#define EFER 0x2e
+#define EFDR 0x2f
+#define UNLOCK 0x87
+#define LOCK 0xaa
+#define LDN_SEL 0x07
 
-#define SIO_EFER 0x2e               /* Extended function enable register */
-#define SIO_EFDR SIO_EFER + 1       /* Extended function data register */
-
-#define SIO_UNLOCK 0x87
-#define SIO_LOCK 0xaa
-#define SIO_LDN_SEL 0x07
-
-uint8_t sio_read(uint8_t reg, uint16_t port)
+uint8_t sio_readb(uint8_t reg, uint16_t port)
 {
-    outb_p(reg, port);
-    return inb_p(port + 1);
+    outb(reg, port);
+    return inb(port + 1);
 }
 
-void sio_write(uint8_t value, uint8_t reg, uint16_t port)
+void sio_writeb(uint8_t value, uint8_t reg, uint16_t port)
 {
-    outb_p(reg, port);
-    outb_p(value, port + 1);
+    outb(reg, port);
+    outb(value, port + 1);
 }
 
 void sio_enter(void)
 {
-    outb_p(SIO_UNLOCK, SIO_EFER);
-    outb_p(SIO_UNLOCK, SIO_EFER);
+    outb(UNLOCK, EFER);
+    outb(UNLOCK, EFER);
 }
 
 void sio_exit(void)
 {
-    outb_p(SIO_LOCK, SIO_EFER);
+    outb(LOCK, EFER);
 }
 
-uint16_t sio_temperature_raw(uint8_t high, uint8_t low)
+void sio_chip_info(uint16_t iobase)
 {
-    uint16_t base = high;
-    printf("base = %d\n", base);
-    return (base << 1) | low;
+    printf("iobase = 0x%x\n", iobase);
+    int chipid = (sio_readb(0x20, EFER) << 8) | sio_readb(0x21, EFER);
+    printf("chipid_l = 0x%x\n", chipid);
+    sio_writeb(0x80, 0x4e, iobase);
+    int vendorid_high = sio_readb(0x4f, iobase);
+    sio_writeb(0x00, 0x4e, iobase);
+    int vendorid_low = sio_readb(0x4f, iobase);
+    printf("vendorid = 0x%x\n", (vendorid_high << 8) | vendorid_low);
+
+}
+
+void sio_ldn_select(uint8_t device)
+{
+    sio_writeb(device, LDN_SEL, EFER);
+}
+
+void sio_bank_select(uint8_t bank, uint16_t iobase)
+{
+    sio_writeb(bank, 0x4e, iobase);
 }
 
 double sio_temperature(uint8_t high, uint8_t low)
 {
     bool neg = high & 0x80;
-    int8_t base = ((high & 0x7f) << 1) | low;
+    int base = ((high & 0x7f) << 1) | ((low & 0x80) >> 7);
     if (neg)
-        printf("It's negative!\n");
-    printf("base = %d\n", base);
+        base -= 1 << 9;
     return base * 0.5;
 }
 
 int main(int argc, char **argv)
 {
-    if (ioperm(0, 6000, 1) < 0) {
+    if (ioperm(0, 65535, 1)) {
 		printf("%s must be run as root\n", argv[0]);
         return 1;
     }
 
     sio_enter();
 
-    int chipid = (sio_read(0x20, SIO_EFER) << 8) | sio_read(0x21, SIO_EFER);
-    printf("chipid = 0x%x\n", chipid);
+    sio_ldn_select(0x0b);
 
-    /* Select hardware manager logical device. */
-    sio_write(0x0b, SIO_LDN_SEL, SIO_EFER);
+    int iobase = ((sio_readb(0x60, EFER) << 8) | sio_readb(0x61, EFER)) + 5;
+    sio_chip_info(iobase);
 
-    int iobase = (sio_read(0x60, SIO_EFER) << 8) | sio_read(0x61, SIO_EFER);
-    printf("iobase = 0x%x\n", iobase);
+    sio_bank_select(0x04, iobase);
 
-    int cr1a = sio_read(0x1a, SIO_EFER);
-    printf("cr1a = 0x%x\n", cr1a);
-    int cr1b= sio_read(0x1b, SIO_EFER);
-    printf("cr1b = 0x%x\n", cr1b);
-    int cr2a = sio_read(0x2a, SIO_EFER);
-    printf("cr2a = 0x%x\n", cr2a);
-    int cr2f = sio_read(0x2f, SIO_EFER);
-    printf("cr2f = 0x%x\n", cr2f);
+    double cpuvcore = sio_readb(0x80, iobase) * 0.008;
+    printf("cpuvcore = %g V\n", cpuvcore);
 
-    /*int vendorid = sio_read(0xfe, iobase + 5);*/
-    /*printf("vendorid = 0x%x\n\n", vendorid);*/
-
-    printf("\n");
-    printf("CPUVCORE = %g\n", sio_read(0x00, iobase + 5) * 0.008);
-    printf("    VIN0 = %g\n", sio_read(0x01, iobase + 5) * 0.008);
-    printf("    AVSB = %g\n", sio_read(0x02, iobase + 5) * 0.016);
-    printf("    3VCC = %g\n", sio_read(0x03, iobase + 5) * 0.016);
-    printf("    VIN1 = %g\n", sio_read(0x04, iobase + 5) * 0.008);
-    printf("    VIN2 = %g\n", sio_read(0x05, iobase + 5) * 0.008);
-    printf("    VHIF = %g\n", sio_read(0x06, iobase + 5) * 0.016);
-    printf("    3VSB = %g\n", sio_read(0x07, iobase + 5) * 0.016);
-    printf("    VBAT = %g\n", sio_read(0x08, iobase + 5) * 0.016);
-    printf("     VTT = %g\n", sio_read(0x09, iobase + 5) * 0.008);
+    sio_bank_select(0x01, iobase);
+    printf("cputin = %.1f C\n",
+           sio_temperature(sio_readb(0x50, iobase), sio_readb(0x51, iobase)));
 
     sio_exit();
 

@@ -1,5 +1,5 @@
 PROG = devport
-CFLAGS += -O2 -Wall -pedantic -std=c11
+CFLAGS += -O -Wall -pedantic -std=c11
 OBJS = devport.o
 
 $(PROG): $(OBJS)
